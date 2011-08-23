@@ -1,3 +1,7 @@
 GIT Repository for Tinderbox
 Created from a clean checkout of the CVS version.
 
+Libraries needed for stock ubuntu setup:
+
+libcompress-bzip2-perl
+libjson-perl

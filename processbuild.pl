@@ -51,6 +51,10 @@ my $rejected_mail_dir = "$::data_dir/bad";
 # parse args
 GetOptions("check-mail" => \$only_check_mail) or die ("Error parsing args.");
 
+open(DEBUG_LOG, ">>", "/tmp/tbox_debug.log") or die "Can't write log file: $!"; #bear
+
+debug_log("starting run"); #bear
+
 # Acquire a lock first so that we don't step on ourselves
 my $lockfile = "$::data_dir/processbuild.sem";
 my $lock = &lock_datafile($lockfile);
@@ -60,10 +64,14 @@ if ($err) {
     unlink($lockfile);
     die("Can't opendir($::data_dir): $!");
 }
+
 my @datafiles = 
     sort(grep { /^tbx\.\d+\.\d+$/ && -f "$::data_dir/$_" } readdir(DIR));
 closedir(DIR);
 print "Files: @datafiles\n" if ($debug && $#datafiles > 0);
+
+debug_log("processing $#datafiles");
+
 for my $file (@datafiles) {
     &process_mailfile("$::data_dir/$file");
 }
@@ -86,6 +94,9 @@ for my $t (@changed_trees) {
         warn "buildwho.pl returned an error for tree $t\n";
     }
 }
+
+debug_log("ending run"); #bear
+
 exit(0);
 # end of main
 ######################################################################
@@ -98,6 +109,9 @@ sub process_mailfile($) {
     $logfile_base =~ s/^tbx\.//;
 
     print "process_mailfile($mail_file)\n" if ($debug);
+
+    my $size = (stat($mail_file))[7];
+    debug_log("processing $mail_file $size"); #bear
 
     my %MAIL_HEADER = ();
     my %tinderbox = ();
@@ -129,6 +143,9 @@ sub process_mailfile($) {
         my $rejected_mail = $rejected_mail_dir . "/" . basename($mail_file);
         print "Moving corrupt logfile, $mail_file , to $rejected_mail .\n";
         move($mail_file, $rejected_mail_dir);
+
+        debug_log("skipping bad file"); #bear
+
         return;
     }
 
@@ -136,6 +153,8 @@ sub process_mailfile($) {
         warn "Mail variables passed the test\n";
         return;
     }
+
+    debug_log("writing build.dat"); #bear
 
     # Write data to "build.dat"
     #
@@ -149,12 +168,15 @@ sub process_mailfile($) {
         push @changed_trees, $tinderbox{tree};
     }
 
+    debug_log("compressing log file"); #bear
+
     # Compress the build log and put it in the tree
     #
     print "Compress\n" if ($debug);
     if ($tinderbox{status} =~ /building/) {
         unlink $mail_file;
         print "process_mailfile($mail_file) Building: END\n" if ($debug);
+        debug_log("skipping status=building file"); #bear
         return;
     } else {
         return if (&compress_log_file(\%tinderbox, $mail_file));
@@ -177,6 +199,8 @@ sub process_mailfile($) {
         warn "warnings.pl($tinderbox{tree}, $tinderbox{logfile}) returned an error\n" if ($err);
     }
 
+    debug_log("checking if scrape is defined"); #bear
+
     # Scrape data
     #   Look for build name in scrapebuilds.pl.
     print "Scrape($tinderbox{tree},$tinderbox{logfile})\n" if ($debug);
@@ -186,6 +210,8 @@ sub process_mailfile($) {
         if -r "$::tree_dir/$tinderbox{tree}/scrapebuilds.pl";
     package main;
 
+   debug_log("scrape is defined as $::default_scrape"); #bear
+
     my $doscrape = $::default_scrape;
     if ($tinderbox{status} eq 'building') {
         $doscrape = 0;
@@ -194,10 +220,15 @@ sub process_mailfile($) {
         $doscrape = $TreeConfig::scrape_builds->{$tinderbox{build}};
     }
     if ($doscrape) {
+        debug_log("starting scrape"); #bear
+
         $err = system("./scrape.pl", "$tinderbox{tree}", "$tinderbox{logfile}");
         warn "scrape.pl($tinderbox{tree},$tinderbox{logfile}) returned an error\n" if ($err);
+        debug_log("ending scrape"); #bear
     }
     print "process_mailfile($mail_file) END\n" if ($debug);
+
+    debug_log("end processing $mail_file"); #bear
 }
 
 # This routine will scan through log looking for 'tinderbox:' variables
@@ -240,6 +271,10 @@ sub parse_mail_header {
 sub check_required_variables {
   my ($tbx, $mail_header) = @_;
   my $err_string = '';
+
+  debug_log("tinderbox: tree: $tbx->{tree}"); #bear
+  debug_log("tinderbox: build: $tbx->{build}"); #bear
+  debug_log("tinderbox: status: $tbx->{status}"); #bear
 
   if ($tbx->{tree} eq '') {
     $err_string .= "Variable 'tinderbox:tree' not set.\n";
@@ -455,4 +490,11 @@ sub compress_log_file {
   close LOG2;
   unlink $maillog;
   return 0;
+}
+
+#bear
+sub debug_log {
+    my ($msg) = @_;
+    my $ts = localtime(time);
+    print DEBUG_LOG "$ts $msg \n";
 }
