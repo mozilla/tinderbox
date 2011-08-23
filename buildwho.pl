@@ -23,11 +23,11 @@
 use strict;
 use File::Copy 'move';
 
-use lib "@TINDERBOX_DIR@";
+use lib "/var/www/iscsi/webtools/tinderbox";
 require 'tbglobals.pl';
 my $F_DEBUG=0;
 
-$ENV{'PATH'} = "@SETUID_PATH@";
+$ENV{'PATH'} = "/usr/bin:/bin";
 
 # Process args:
 #   $days: How many days of data to process.

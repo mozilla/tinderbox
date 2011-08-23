@@ -21,11 +21,11 @@
 # Contributor(s): 
 
 use strict;
-use lib "@TINDERBOX_DIR@";
+use lib "/var/www/iscsi/webtools/tinderbox";
 require 'tbglobals.pl';
 
-$ENV{'PATH'} = "@SETUID_PATH@";
-my $tinderboxdir = "@TINDERBOX_DIR@";
+$ENV{'PATH'} = "/usr/bin:/bin";
+my $tinderboxdir = "/var/www/iscsi/webtools/tinderbox";
 
 chdir $tinderboxdir or die "Couldn't chdir to $tinderboxdir"; 
 

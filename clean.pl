@@ -20,12 +20,12 @@
 #
 # Contributor(s): 
 
-use lib "@TINDERBOX_DIR@";
+use lib "/var/www/iscsi/webtools/tinderbox";
 use strict;
 use Getopt::Std;
 
 my $verbose = 0;
-my $tinderboxdir = "@TINDERBOX_DIR@";
+my $tinderboxdir = "/var/www/iscsi/webtools/tinderbox";
 chdir $tinderboxdir or die "Couldn't chdir to $tinderboxdir"; 
 
 # tbglobals.pl must be included after chdir

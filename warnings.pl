@@ -32,7 +32,7 @@
 use strict;
 use FileHandle;
 use Compress::Zlib;
-use lib "@TINDERBOX_DIR@";
+use lib "/var/www/iscsi/webtools/tinderbox";
 
 require 'tbglobals.pl';
 
@@ -83,7 +83,7 @@ sub usage {
     warn "Usage: $0 [--debug] tree logfile\n";
 }
 
-$ENV{PATH} = "@SETUID_PATH@";
+$ENV{PATH} = "/usr/bin:/bin";
 
 my $debug = 0;
 $debug = 1, shift @ARGV if $ARGV[0] eq '--debug';

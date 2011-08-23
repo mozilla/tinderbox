@@ -55,8 +55,8 @@ $::CI_LOG=11;
 #
 
 # Variables set from Makefile
-$::default_cvsroot = "@CVSROOT@";
-$::data_dir='@DATA_DIR@';
+$::default_cvsroot = "/cvsroot";
+$::data_dir='/var/www/iscsi/webtools/tinderbox/data';
 $::tree_dir = 'trees';
 $::static_rel_path = '../../';
 if ( ! -d "$::tree_dir/." ) {

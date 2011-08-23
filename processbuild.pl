@@ -26,14 +26,14 @@ use Getopt::Long;
 use Time::Local;
 use File::Copy;
 use File::Basename;
-use lib "@TINDERBOX_DIR@";
+use lib "/var/www/iscsi/webtools/tinderbox";
 use strict;
 
 umask 002;
 
 # setuid globals
-$ENV{'PATH'} = "@SETUID_PATH@";
-my $tinderboxdir = "@TINDERBOX_DIR@";
+$ENV{'PATH'} = "/usr/bin:/bin";
+my $tinderboxdir = "/var/www/iscsi/webtools/tinderbox";
 
 # globals
 my ($only_check_mail);

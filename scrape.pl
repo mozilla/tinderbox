@@ -33,11 +33,11 @@ sub usage {
 }
 
 use Compress::Zlib;
-use lib "@TINDERBOX_DIR@";
+use lib "/var/www/iscsi/webtools/tinderbox";
 require "tbglobals.pl";
 my $debug = 0;
 
-$ENV{PATH} = "@SETUID_PATH@";
+$ENV{PATH} = "/usr/bin:/bin";
 
 unless ($#ARGV == 1) {
   &usage;
