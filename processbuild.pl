@@ -110,7 +110,7 @@ sub process_mailfile($) {
 
     print "process_mailfile($mail_file)\n" if ($debug);
 
-    my $size = (stat($mail_file))[7];
+    my $size = (stat($mail_file))[7]; #bear
     debug_log("processing $mail_file $size"); #bear
 
     my %MAIL_HEADER = ();
@@ -222,9 +222,11 @@ sub process_mailfile($) {
     if ($doscrape) {
         debug_log("starting scrape"); #bear
 
-        $err = system("./scrape.pl", "$tinderbox{tree}", "$tinderbox{logfile}");
-        warn "scrape.pl($tinderbox{tree},$tinderbox{logfile}) returned an error\n" if ($err);
-        debug_log("ending scrape"); #bear
+        my $scrapetime = `time -f \"r %e u %U s %S\" ./scrape.pl $tinderbox{tree} $tinderbox{logfile} 2>&1`; #bear
+        #bear
+        #warn "scrape.pl($tinderbox{tree},$tinderbox{logfile}) returned an error\n" if ($err);
+
+        debug_log("ending scrape $scrapetime"); #bear
     }
     print "process_mailfile($mail_file) END\n" if ($debug);
 
