@@ -24,6 +24,7 @@ use Compress::Zlib;
 use Compress::Bzip2;
 use Getopt::Long;
 use Time::Local;
+use Time::HiRes qw(gettimeofday tv_interval);
 use File::Copy;
 use File::Basename;
 use lib "/var/www/iscsi/webtools/tinderbox";
@@ -51,9 +52,10 @@ my $rejected_mail_dir = "$::data_dir/bad";
 # parse args
 GetOptions("check-mail" => \$only_check_mail) or die ("Error parsing args.");
 
-open(DEBUG_LOG, ">>", "/tmp/tbox_debug.log") or die "Can't write log file: $!"; #bear
+open(DEBUG_LOG, ">>", "/tmp/tbox_debug.log") or die "Can't write log file: $!"; 
+open(DEBUG_STATS, ">>", "/tmp/tbox_stats.log") or die "Can't write log file: $!"; 
 
-debug_log("starting run"); #bear
+debug_log("starting run"); 
 
 # Acquire a lock first so that we don't step on ourselves
 my $lockfile = "$::data_dir/processbuild.sem";
@@ -65,12 +67,16 @@ if ($err) {
     die("Can't opendir($::data_dir): $!");
 }
 
+my $t0 = [gettimeofday];
+
 my @datafiles = 
     sort(grep { /^tbx\.\d+\.\d+$/ && -f "$::data_dir/$_" } readdir(DIR));
 closedir(DIR);
-print "Files: @datafiles\n" if ($debug && $#datafiles > 0);
 
-debug_log("processing $#datafiles");
+my $et = tv_interval($t0, [gettimeofday]);
+debug_log("directory scan: $#datafiles in $et");
+
+print "Files: @datafiles\n" if ($debug && $#datafiles > 0);
 
 for my $file (@datafiles) {
     &process_mailfile("$::data_dir/$file");
@@ -95,7 +101,12 @@ for my $t (@changed_trees) {
     }
 }
 
-debug_log("ending run"); #bear
+my $et = tv_interval($t0, [gettimeofday]);
+
+debug_log("ending run: elapsed time $et"); 
+
+close DEBUG_LOG;
+close DEBUG_STATS;
 
 exit(0);
 # end of main
@@ -108,10 +119,14 @@ sub process_mailfile($) {
     my $logfile_base = basename($mail_file);
     $logfile_base =~ s/^tbx\.//;
 
+    my $size = (stat($mail_file))[7]; 
+    debug_log("processing $mail_file $size"); 
+
+    my %debug_stats = ("mailfile", $mail_file, "size", $size);
+
     print "process_mailfile($mail_file)\n" if ($debug);
 
-    my $size = (stat($mail_file))[7]; #bear
-    debug_log("processing $mail_file $size"); #bear
+    my $et_process = [gettimeofday];
 
     my %MAIL_HEADER = ();
     my %tinderbox = ();
@@ -123,9 +138,18 @@ sub process_mailfile($) {
         warn "Can't open $mail_file: $!";
         return;
     }
+
+    my $t0 = [gettimeofday];
+
     parse_mail_header(*LOG, \%MAIL_HEADER);
+
+    $debug_stats{et_parse_mail_header} = tv_interval($t0, [gettimeofday]);
+    $t0 = [gettimeofday];
+
     parse_log_variables(*LOG, \%tinderbox);
     close LOG;
+
+    $debug_stats{et_parse_log_variables} = tv_interval($t0, [gettimeofday]);
 
     print "Parsing: end\n" if ($debug);
 
@@ -137,6 +161,10 @@ sub process_mailfile($) {
         return;
     }
 
+    $debug_stats{tree} = $tinderbox{tree};
+    $debug_stats{build} = $tinderbox{build};
+    $debug_stats{status} = $tinderbox{status};
+
     # Make sure variables are defined correctly
     #
     if (&check_required_variables(\%tinderbox, \%MAIL_HEADER)) {
@@ -144,7 +172,7 @@ sub process_mailfile($) {
         print "Moving corrupt logfile, $mail_file , to $rejected_mail .\n";
         move($mail_file, $rejected_mail_dir);
 
-        debug_log("skipping bad file"); #bear
+        debug_log("skipping bad file"); 
 
         return;
     }
@@ -154,7 +182,7 @@ sub process_mailfile($) {
         return;
     }
 
-    debug_log("writing build.dat"); #bear
+    debug_log("writing build.dat"); 
 
     # Write data to "build.dat"
     #
@@ -168,7 +196,7 @@ sub process_mailfile($) {
         push @changed_trees, $tinderbox{tree};
     }
 
-    debug_log("compressing log file"); #bear
+    debug_log("compressing log file"); 
 
     # Compress the build log and put it in the tree
     #
@@ -176,10 +204,14 @@ sub process_mailfile($) {
     if ($tinderbox{status} =~ /building/) {
         unlink $mail_file;
         print "process_mailfile($mail_file) Building: END\n" if ($debug);
-        debug_log("skipping status=building file"); #bear
+        debug_log("skipping status=building file"); 
         return;
     } else {
-        return if (&compress_log_file(\%tinderbox, $mail_file));
+        $t0 = [gettimeofday];
+        my $rc = &compress_log_file(\%tinderbox, $mail_file);
+        $debug_stats{et_compress_log_file} = tv_interval($t0, [gettimeofday]);
+
+        return if ($rc);
     }
 
     # Warnings
@@ -191,6 +223,8 @@ sub process_mailfile($) {
         if -r "$::tree_dir/$tinderbox{tree}/warningbuilds.pl";
     package main;
 
+    $t0 = [gettimeofday];
+
     if (defined $TreeConfig::warning_builds
         and defined($TreeConfig::warning_builds->{$tinderbox{build}})
         and $tinderbox{status} ne 'building'
@@ -199,7 +233,10 @@ sub process_mailfile($) {
         warn "warnings.pl($tinderbox{tree}, $tinderbox{logfile}) returned an error\n" if ($err);
     }
 
-    debug_log("checking if scrape is defined"); #bear
+    $debug_stats{et_warnings} = tv_interval($t0, [gettimeofday]);
+    $t0 = [gettimeofday];
+
+    debug_log("checking if scrape is defined"); 
 
     # Scrape data
     #   Look for build name in scrapebuilds.pl.
@@ -210,7 +247,7 @@ sub process_mailfile($) {
         if -r "$::tree_dir/$tinderbox{tree}/scrapebuilds.pl";
     package main;
 
-   debug_log("scrape is defined as $::default_scrape"); #bear
+   debug_log("scrape is defined as $::default_scrape"); 
 
     my $doscrape = $::default_scrape;
     if ($tinderbox{status} eq 'building') {
@@ -220,17 +257,24 @@ sub process_mailfile($) {
         $doscrape = $TreeConfig::scrape_builds->{$tinderbox{build}};
     }
     if ($doscrape) {
-        debug_log("starting scrape"); #bear
-
-        my $scrapetime = `time -f \"r %e u %U s %S\" ./scrape.pl $tinderbox{tree} $tinderbox{logfile} 2>&1`; #bear
-        #bear
-        #warn "scrape.pl($tinderbox{tree},$tinderbox{logfile}) returned an error\n" if ($err);
-
-        debug_log("ending scrape $scrapetime"); #bear
+        warn "scrape.pl($tinderbox{tree},$tinderbox{logfile}) returned an error\n" if ($err);
     }
+
+    $debug_stats{et_scrape} = tv_interval($t0, [gettimeofday]);
+    $debug_stats{et_process} = tv_interval($et_process, [gettimeofday]);
+
+    my $key = "";
+    my $value = "";
+    my $ts = localtime(time);
+    print DEBUG_STATS "$ts";
+    while (($key, $value) = each(%debug_stats)){
+         print DEBUG_STATS ", $key = $value";
+    }
+    print DEBUG_STATS "\n";
+
     print "process_mailfile($mail_file) END\n" if ($debug);
 
-    debug_log("end processing $mail_file"); #bear
+    debug_log("end processing $mail_file"); 
 }
 
 # This routine will scan through log looking for 'tinderbox:' variables
@@ -274,9 +318,9 @@ sub check_required_variables {
   my ($tbx, $mail_header) = @_;
   my $err_string = '';
 
-  debug_log("tinderbox: tree: $tbx->{tree}"); #bear
-  debug_log("tinderbox: build: $tbx->{build}"); #bear
-  debug_log("tinderbox: status: $tbx->{status}"); #bear
+  debug_log("tinderbox: tree: $tbx->{tree}"); 
+  debug_log("tinderbox: build: $tbx->{build}"); 
+  debug_log("tinderbox: status: $tbx->{status}"); 
 
   if ($tbx->{tree} eq '') {
     $err_string .= "Variable 'tinderbox:tree' not set.\n";
@@ -494,7 +538,7 @@ sub compress_log_file {
   return 0;
 }
 
-#bear
+
 sub debug_log {
     my ($msg) = @_;
     my $ts = localtime(time);
